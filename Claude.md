@@ -6,7 +6,7 @@ Xây dựng web app chạy trên trình duyệt để ghi lại các lần đổ
 
 ## Các tab chính
 
-Ứng dụng có ba tab: **Ghi xăng**, **Thông tin cá nhân**, **Cây xăng gần nhất**.
+Ứng dụng có ba tab, sắp xếp từ trái sang phải: **Cây xăng gần nhất** | **Ghi xăng** (ở giữa, là tab mở mặc định) | **Thông tin cá nhân**.
 
 ### 1. Ghi xăng (Record xăng)
 
@@ -17,26 +17,40 @@ Xây dựng web app chạy trên trình duyệt để ghi lại các lần đổ
 **Form ghi một lần đổ xăng** gồm các input (đều có nhãn, kiểm tra dữ liệu đầu vào, thông báo lỗi dễ hiểu):
 
 1. **Ngày đổ** (date picker): mặc định là hôm nay, không cho chọn ngày tương lai.
-2. **Giá xăng/lít**: sau khi chọn ngày, gọi API lấy giá xăng của đúng ngày đó và hiển thị (đơn vị: đồng/lít).
-   - Nếu API lỗi, không có dữ liệu cho ngày đó hoặc không có mạng: báo rõ và cho phép nhập giá thủ công; không tự điền giá giả.
-   - Chỉ hiển thị giá như dữ liệu thực khi có nguồn xác thực; ghi rõ nguồn và ngày cập nhật của giá.
-3. **Số tiền đã đổ** (đồng).
-4. **Số km trên đồng hồ (odometer)** tại thời điểm đổ: cần để tính quãng đường giữa hai lần đổ đầy liên tiếp.
+2. **Loại xăng** (dropdown): danh sách loại nhiên liệu lấy từ API giá xăng sau khi chọn ngày. **Chỉ sau khi chọn loại xăng mới hiện ô giá.**
+3. **Giá xăng/lít** (đồng/lít): tự điền theo loại xăng đã chọn, vẫn sửa tay được.
+   - Nguồn: `https://vietfuelapi-demo.pages.dev/mock-data/fuel-prices.json` (cấu hình qua `FUEL_PRICE_API_URL`). API chỉ có **một mốc giá mới nhất**, không có lịch sử theo ngày, nên dù chọn ngày nào cũng lấy **giá của ngày cập nhật gần nhất**; hiển thị rõ "giá gần nhất", nguồn, ngày cập nhật và ghi chú "chỉ mang tính tham khảo".
+   - Mặc định lấy giá Petrolimex Vùng 1 (đổi bằng `FUEL_PRICE_REGION`).
+   - Nếu API lỗi, không có dữ liệu hoặc không có mạng: báo rõ, hiện ô giá để nhập thủ công; không tự điền giá giả.
+4. **Số tiền đã đổ** (đồng).
+5. **Số km trên đồng hồ (odometer)**: **không bắt buộc**. Nếu nhập, phải lớn hơn km của lần đổ trước và nhỏ hơn km của lần đổ sau (theo ngày).
+
+Tất cả input, dropdown và nút chọn ngày trong form có cùng chiều cao (44px) và cỡ chữ để đồng đều.
 
 **Tính toán tự động** (hiển thị ngay khi đủ dữ liệu):
 
 - Số lít = số tiền ÷ giá xăng/lít.
-- Quãng đường = km hiện tại − km của lần đổ đầy liền trước.
+- Quãng đường = km hiện tại − km của lần đổ liền trước; **chỉ tính khi cả hai lần đều có km** (nếu bỏ qua km một lần ở giữa thì số lít không khớp quãng đường).
 - **Số lít/100 km** = số lít ÷ quãng đường × 100.
 - **Số tiền/km** = số tiền ÷ quãng đường.
-- Lần ghi đầu tiên chưa có lần trước để so sánh: chỉ tính số lít, hiển thị "chưa đủ dữ liệu" cho hai chỉ số còn lại. Báo lỗi nếu km nhỏ hơn hoặc bằng lần trước.
+- Khi thiếu km hoặc chưa có lần trước: hiển thị "chưa đủ dữ liệu" cho các chỉ số phụ thuộc quãng đường.
 
-**Danh sách lịch sử**:
+**Bố cục tab Ghi xăng**: thông báo cố định → nút "Thêm lần đổ xăng" (mở form dạng Drawer) → hai sub-tab đặt cạnh nhau: **Lịch sử đổ xăng** | **Biểu đồ**.
 
-- Hiển thị các record dạng **thẻ (card)**, lần lượt từ mới đến cũ; mỗi thẻ gồm ngày, giá/lít, số tiền, số lít, quãng đường, lít/100 km, tiền/km.
-- **Bộ lọc theo ngày và theo tháng** (chọn một ngày cụ thể hoặc một tháng); có nút xoá bộ lọc.
-- Hiển thị tổng chi phí (và tổng số lít) của các record đang được lọc.
-- Cho phép sửa/xoá record. Trạng thái rỗng: hướng dẫn người dùng thêm record đầu tiên.
+**Sub-tab Lịch sử đổ xăng**:
+
+- Hiển thị các record dạng **thẻ (card)**, từ mới đến cũ; mỗi thẻ gồm ngày, loại xăng, giá/lít, số tiền, số lít, quãng đường, lít/100 km, tiền/km.
+- **Chỉ có bộ lọc theo tháng** (không lọc theo ngày), đặt bên phải, cùng kích thước với các input khác; có nút xoá bộ lọc.
+- Hiển thị tổng chi phí, tổng số lít và số lần đổ của các record đang được lọc.
+- Cho phép sửa/xoá record (xác nhận trước khi xoá). Trạng thái rỗng: hướng dẫn người dùng thêm record đầu tiên.
+
+**Sub-tab Biểu đồ**: hiển thị tổng **số tiền đổ xăng theo tháng** (tối đa 12 tháng gần nhất, tháng không đổ tính 0).
+
+- Có bộ chọn kiểu hiển thị (dropdown, căn phải) với ba lựa chọn: **Bảng** (mặc định), **Biểu đồ cột**, **Biểu đồ đường**. Mỗi lúc chỉ hiện một kiểu.
+- Bảng gồm: tháng, số lần đổ, tổng số lít, tổng số tiền.
+- Biểu đồ vẽ bằng SVG, một trục, một màu chuỗi (không cần chú giải), lưới và trục nhạt; tooltip khi hover/chạm/focus bàn phím (tháng, số tiền, số lít).
+- Có trạng thái đang tải, lỗi (nút thử lại) và rỗng.
+- Không bị ảnh hưởng bởi bộ lọc tháng của lịch sử.
 
 ### 2. Thông tin cá nhân (Account)
 
@@ -44,11 +58,11 @@ Xây dựng web app chạy trên trình duyệt để ghi lại các lần đổ
 
 ### 3. Cây xăng gần nhất
 
-- Hiển thị **Google Maps** trong tab.
+- Tab nằm ngoài cùng bên trái. Hiển thị **Google Maps** trong tab.
 - Khi người dùng chủ động bấm nút "Tìm cây xăng gần tôi", mới xin quyền vị trí (geolocation) của thiết bị; lấy vị trí hiện tại và đặt marker trên bản đồ.
-- Gọi API (Google Places API – Nearby Search, loại `gas_station`) để lấy các cây xăng gần nhất; hiển thị marker trên bản đồ và danh sách bên cạnh/bên dưới, sắp xếp theo khoảng cách (tên, địa chỉ, khoảng cách, giờ mở cửa nếu có).
+- Gọi API (Google Places API (New) – Nearby Search, loại `gas_station`, bán kính 5 km) để lấy các cây xăng gần nhất; hiển thị marker trên bản đồ và danh sách bên cạnh/bên dưới, sắp xếp theo khoảng cách (tên, địa chỉ, khoảng cách, giờ mở cửa nếu có).
 - Loại nhiên liệu/giá tại từng cây xăng chỉ hiển thị nếu nguồn dữ liệu cung cấp; nếu không thì không hiển thị.
-- Nếu người dùng từ chối quyền hoặc không lấy được vị trí: cho phép nhập địa điểm thủ công (ô tìm địa chỉ) và tìm quanh địa điểm đó.
+- Nếu người dùng từ chối quyền hoặc không lấy được vị trí: cho phép nhập địa điểm thủ công (ô tìm địa chỉ, dùng Places Text Search nên chỉ cần bật Places API) và tìm quanh địa điểm đó.
 - Gọi Places qua route phía server (Vercel serverless function) khi cần để giấu key bí mật; key dùng cho Maps JavaScript phía trình duyệt phải được giới hạn theo domain (HTTP referrer) trong Google Cloud.
 
 ## Yêu cầu triển khai
@@ -62,13 +76,13 @@ Xây dựng web app chạy trên trình duyệt để ghi lại các lần đổ
   - Vùng chạm tối thiểu 44×44 px; input dùng đúng kiểu bàn phím (`inputmode="numeric"` cho số tiền/km), cỡ chữ input ≥ 16px để iOS không tự phóng to.
   - Không có cuộn ngang; dùng `dvh` và tính đến safe-area (`env(safe-area-inset-*)`). Form và bộ lọc có thể dùng Drawer/Sheet dạng kéo từ dưới lên; bản đồ chiếm phần lớn chiều cao màn hình trên mobile.
   - Kiểm tra giao diện ở độ rộng 360px, 390px, 768px và desktop.
-- **UI dùng shadcn/ui** (Tailwind CSS + Radix): ưu tiên dùng lại component có sẵn như `Tabs`, `Card`, `Input`, `Label`, `Button`, `Calendar` + `Popover` (date picker), `Select`, `Form`, `Alert`, `Drawer`/`Sheet`, `Dialog`/`AlertDialog` (xác nhận xoá), `Skeleton`, `Sonner`/`Toast`. Chỉ thêm component qua CLI của shadcn khi cần; không tự viết lại component đã có.
+- **UI dùng shadcn/ui** (Tailwind CSS + Radix): ưu tiên dùng lại component có sẵn như `Tabs` (cả tab chính và sub-tab), `Card`, `Input`, `Label`, `Button`, `Calendar` + `Popover` (date picker), `Select`, `Form`, `Alert`, `Drawer`/`Sheet`, `Dialog`/`AlertDialog` (xác nhận xoá), `Skeleton`, `Sonner`/`Toast`. Chỉ thêm component qua CLI của shadcn khi cần; không tự viết lại component đã có.
 - **CSDL dùng SQLite** cho gọn nhẹ, truy cập qua một ORM/query builder nhẹ (ví dụ Drizzle) nếu dự án chưa có lựa chọn khác; schema và migration nằm trong repo.
   - Lưu ý Vercel: hệ thống file của serverless function là tạm thời và chỉ đọc, nên **file SQLite cục bộ không dùng được để lưu dữ liệu khi chạy trên Vercel**.
   - **Dịch vụ được chọn: Turso (libSQL, SQLite phía máy chủ)**, cài qua Vercel Marketplace hoặc tạo trực tiếp trên turso.tech; có gói miễn phí đủ cho giai đoạn này. Dùng driver `@libsql/client` (kết hợp `drizzle-orm/libsql`), chạy được trên Node và Edge runtime của Vercel.
   - Dùng **cùng một driver** cho mọi môi trường, chỉ đổi biến môi trường: phát triển cục bộ `DATABASE_URL=file:./local.db` (không cần token); production trên Vercel `DATABASE_URL=libsql://<tên-db>.turso.io` và `DATABASE_AUTH_TOKEN=<token>` đặt trong Project Settings → Environment Variables. Thêm `local.db` vào `.gitignore`.
   - Migration chạy bằng `drizzle-kit` (từ máy phát triển hoặc bước CI) trên DB Turso; không chạy migration tự động trong lúc request.
-  - Bảng chính `fuel_records`: id, ngày đổ, giá/lít, nguồn giá (hoặc cờ nhập thủ công), số tiền, số lít, km đồng hồ, thời gian tạo/cập nhật. Chưa có tài khoản nên chưa có khoá người dùng; thiết kế để sau này thêm `user_id` dễ dàng.
+  - Bảng chính `fuel_records`: id, ngày đổ, loại xăng, giá/lít, nguồn giá (hoặc cờ nhập thủ công), số tiền, số lít, km đồng hồ (có thể trống), thời gian tạo/cập nhật. Chưa có tài khoản nên chưa có khoá người dùng; thiết kế để sau này thêm `user_id` dễ dàng.
   - Truy cập DB chỉ qua route/server action phía server, không để thông tin kết nối ở phía trình duyệt.
 - Tương thích triển khai trên Vercel. Trước khi thêm thư viện hay thay đổi kiến trúc, kiểm tra cấu trúc và công nghệ sẵn có của dự án, rồi ưu tiên dùng lại chúng.
 - Khi hoàn tất thay đổi, chạy các lệnh kiểm tra/build phù hợp với dự án hiện tại và cập nhật tài liệu liên quan nếu cần.
@@ -112,7 +126,8 @@ DATABASE_URL=file:./local.db
 DATABASE_AUTH_TOKEN=
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=     # key Maps JavaScript, giới hạn theo domain
 GOOGLE_PLACES_API_KEY=               # key dùng phía server, không có tiền tố NEXT_PUBLIC_
-FUEL_PRICE_API_URL=                  # nguồn giá xăng đã xác thực
+FUEL_PRICE_API_URL=https://vietfuelapi-demo.pages.dev/mock-data/fuel-prices.json
+FUEL_PRICE_REGION=region1            # region1 | region2
 FUEL_PRICE_API_KEY=
 ```
 
