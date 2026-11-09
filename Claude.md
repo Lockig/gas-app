@@ -77,13 +77,11 @@ Tất cả input, dropdown và nút chọn ngày trong form có cùng chiều ca
   - Không có cuộn ngang; dùng `dvh` và tính đến safe-area (`env(safe-area-inset-*)`). Form và bộ lọc có thể dùng Drawer/Sheet dạng kéo từ dưới lên; bản đồ chiếm phần lớn chiều cao màn hình trên mobile.
   - Kiểm tra giao diện ở độ rộng 360px, 390px, 768px và desktop.
 - **UI dùng shadcn/ui** (Tailwind CSS + Radix): ưu tiên dùng lại component có sẵn như `Tabs` (cả tab chính và sub-tab), `Card`, `Input`, `Label`, `Button`, `Calendar` + `Popover` (date picker), `Select`, `Form`, `Alert`, `Drawer`/`Sheet`, `Dialog`/`AlertDialog` (xác nhận xoá), `Skeleton`, `Sonner`/`Toast`. Chỉ thêm component qua CLI của shadcn khi cần; không tự viết lại component đã có.
-- **CSDL dùng SQLite** cho gọn nhẹ, truy cập qua một ORM/query builder nhẹ (ví dụ Drizzle) nếu dự án chưa có lựa chọn khác; schema và migration nằm trong repo.
-  - Lưu ý Vercel: hệ thống file của serverless function là tạm thời và chỉ đọc, nên **file SQLite cục bộ không dùng được để lưu dữ liệu khi chạy trên Vercel**.
-  - **Dịch vụ được chọn: Turso (libSQL, SQLite phía máy chủ)**, cài qua Vercel Marketplace hoặc tạo trực tiếp trên turso.tech; có gói miễn phí đủ cho giai đoạn này. Dùng driver `@libsql/client` (kết hợp `drizzle-orm/libsql`), chạy được trên Node và Edge runtime của Vercel.
-  - Dùng **cùng một driver** cho mọi môi trường, chỉ đổi biến môi trường: phát triển cục bộ `DATABASE_URL=file:./local.db` (không cần token); production trên Vercel `DATABASE_URL=libsql://<tên-db>.turso.io` và `DATABASE_AUTH_TOKEN=<token>` đặt trong Project Settings → Environment Variables. Thêm `local.db` vào `.gitignore`.
-  - Migration chạy bằng `drizzle-kit` (từ máy phát triển hoặc bước CI) trên DB Turso; không chạy migration tự động trong lúc request.
+- **CSDL dùng Supabase (Postgres)**, truy cập qua Drizzle ORM (`drizzle-orm/postgres-js` + driver `postgres`); schema và migration nằm trong repo. (Trước đó dự án dùng SQLite/Turso; đã chuyển sang Supabase để thuận tiện làm đăng nhập/Auth về sau.)
+  - Kết nối bằng **một biến `DATABASE_URL`** là chuỗi **Transaction pooler** (cổng 6543) của Supabase, vì Vercel là serverless. Bắt buộc `prepare: false` khi dùng pooler này. Không có file DB cục bộ; phát triển cục bộ dùng cùng project Supabase (nên tạo project riêng cho dev) hoặc Postgres chạy bằng Docker.
+  - Chỉ truy cập DB từ route/server action phía server bằng kết nối Postgres trực tiếp; không dùng anon key của Supabase trong trình duyệt để ghi dữ liệu. Nếu bật Row Level Security thì giữ nguyên chế độ chặn mọi truy cập qua Data API (không tạo policy công khai) vì app không dùng Data API.
+  - Migration chạy bằng `drizzle-kit push` (hoặc generate + migrate) từ máy phát triển; không chạy migration tự động trong lúc request. Chuỗi kết nối dùng cho `drizzle-kit` nên là Session pooler (cổng 5432) hoặc Direct connection.
   - Bảng chính `fuel_records`: id, ngày đổ, loại xăng, giá/lít, nguồn giá (hoặc cờ nhập thủ công), số tiền, số lít, km đồng hồ (có thể trống), thời gian tạo/cập nhật. Chưa có tài khoản nên chưa có khoá người dùng; thiết kế để sau này thêm `user_id` dễ dàng.
-  - Truy cập DB chỉ qua route/server action phía server, không để thông tin kết nối ở phía trình duyệt.
 - Tương thích triển khai trên Vercel. Trước khi thêm thư viện hay thay đổi kiến trúc, kiểm tra cấu trúc và công nghệ sẵn có của dự án, rồi ưu tiên dùng lại chúng.
 - Khi hoàn tất thay đổi, chạy các lệnh kiểm tra/build phù hợp với dự án hiện tại và cập nhật tài liệu liên quan nếu cần.
 
@@ -99,31 +97,25 @@ Mặc định dùng **Next.js (App Router) + TypeScript + Tailwind CSS**, vì ch
 npx create-next-app@latest gas_app --ts --tailwind --eslint --app --src-dir
 cd gas_app
 npx shadcn@latest init
-npm i @libsql/client drizzle-orm
+npm i drizzle-orm postgres
 npm i -D drizzle-kit
 ```
 
 Thêm component shadcn khi cần, ví dụ: `npx shadcn@latest add tabs card input label button calendar popover select form alert drawer alert-dialog skeleton sonner`.
 
-### Bước 2. Tạo cơ sở dữ liệu Turso
+### Bước 2. Lấy chuỗi kết nối Supabase
 
-```bash
-curl -sSfL https://get.tur.so/install.sh | bash   # cài Turso CLI
-turso auth login
-turso db create gas-app
-turso db show gas-app --url                       # -> DATABASE_URL (libsql://...)
-turso db tokens create gas-app                    # -> DATABASE_AUTH_TOKEN
-```
-
-Hoặc thêm Turso trực tiếp từ Vercel Dashboard → Storage/Marketplace (biến môi trường được tự thêm vào project).
+1. Vào supabase.com → chọn project (hoặc **New project** và đặt mật khẩu database, hãy lưu lại).
+2. Bấm nút **Connect** (hoặc Project Settings → Database → Connection string).
+3. Chọn **Transaction pooler** (cổng 6543) và sao chép chuỗi dạng `postgresql://postgres.<project-ref>:<PASSWORD>@aws-0-<region>.pooler.supabase.com:6543/postgres`, thay `<PASSWORD>` bằng mật khẩu database (không phải anon key).
+4. Chuỗi này chính là `DATABASE_URL`. Không đăng nó lên nơi công khai và không commit.
 
 ### Bước 3. Cấu hình biến môi trường
 
 Tạo `.env.local` (đã nằm trong `.gitignore`, **không commit**) và tạo `.env.example` chỉ chứa tên biến, không chứa giá trị thật:
 
 ```
-DATABASE_URL=file:./local.db
-DATABASE_AUTH_TOKEN=
+DATABASE_URL=                        # chuỗi Transaction pooler của Supabase (bước 2)
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=     # key Maps JavaScript, giới hạn theo domain
 GOOGLE_PLACES_API_KEY=               # key dùng phía server, không có tiền tố NEXT_PUBLIC_
 FUEL_PRICE_API_URL=https://vietfuelapi-demo.pages.dev/mock-data/fuel-prices.json
@@ -142,7 +134,7 @@ Trong Google Cloud Console: tạo project → bật **Maps JavaScript API** và 
 ### Bước 5. Chạy thử và kiểm tra cục bộ
 
 ```bash
-npx drizzle-kit push        # tạo bảng trong local.db (hoặc generate + migrate)
+npx drizzle-kit push        # tạo bảng trong Supabase (hoặc generate + migrate)
 npm run dev                 # thử trên điện thoại/giả lập ở 360px và 390px
 npm run lint && npm run build
 ```
@@ -156,22 +148,22 @@ git init && git add . && git commit -m "Initial commit"
 gh repo create gas-app --private --source=. --push
 ```
 
-Kiểm tra `.env.local` và `local.db` chưa bị commit.
+Kiểm tra `.env.local` chưa bị commit.
 
 ### Bước 7. Tạo project trên Vercel
 
 1. Vào vercel.com → **Add New → Project** → import repo GitHub vừa tạo (Framework Preset tự nhận Next.js, giữ mặc định).
-2. Trong **Environment Variables**, thêm các biến ở Bước 3 với giá trị production (`DATABASE_URL=libsql://...`, `DATABASE_AUTH_TOKEN`, hai key Google, thông tin API giá xăng).
+2. Trong **Environment Variables**, thêm các biến ở Bước 3 với giá trị production (`DATABASE_URL` của Supabase, hai key Google, thông tin API giá xăng).
 3. Bấm **Deploy**.
 
 Cách khác bằng CLI: `npm i -g vercel` → `vercel login` → `vercel link` → `vercel env add <TÊN>` → `vercel --prod`.
 
-### Bước 8. Chạy migration trên DB production
+### Bước 8. Tạo bảng trên Supabase
 
-Chạy từ máy phát triển, trỏ vào Turso (không chạy trong lúc request):
+Chạy từ máy phát triển với `DATABASE_URL` trỏ vào Supabase (không chạy trong lúc request):
 
 ```bash
-DATABASE_URL="libsql://..." DATABASE_AUTH_TOKEN="..." npx drizzle-kit push
+npx drizzle-kit push
 ```
 
 ### Bước 9. Hoàn tất và kiểm tra sau triển khai
